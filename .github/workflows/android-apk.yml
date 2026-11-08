@@ -1,0 +1,60 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'SAMP-Mobile-Launcher-RN-main.zip'
+      - '.github/workflows/android-apk.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Extract launcher project
+        run: |
+          unzip -q SAMP-Mobile-Launcher-RN-main.zip -d app-source
+          test -f app-source/SAMP-Mobile-Launcher-RN-main/android/gradlew
+          echo "PROJECT_DIR=$GITHUB_WORKSPACE/app-source/SAMP-Mobile-Launcher-RN-main" >> "$GITHUB_ENV"
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '11'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: yarn
+          cache-dependency-path: app-source/SAMP-Mobile-Launcher-RN-main/yarn.lock
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK components
+        run: sdkmanager "platforms;android-33" "build-tools;31.0.0" "ndk;21.4.7075529"
+
+      - name: Install JavaScript dependencies
+        working-directory: app-source/SAMP-Mobile-Launcher-RN-main
+        run: yarn install --frozen-lockfile --network-timeout 100000
+
+      - name: Build debug APK
+        working-directory: app-source/SAMP-Mobile-Launcher-RN-main/android
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: samp-mobile-launcher-debug-apk
+          path: app-source/SAMP-Mobile-Launcher-RN-main/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
